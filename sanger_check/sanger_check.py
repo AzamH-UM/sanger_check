@@ -4,9 +4,7 @@ from biotite import sequence as bioseq
 import biotite.sequence.align as bioalign
 import biotite.sequence.graphics as graphics
 import matplotlib.pyplot as plt
-import random
 import numpy as np
-import primer_design
 import pandas as pd
 from dataclasses import dataclass
 from tqdm import tqdm
