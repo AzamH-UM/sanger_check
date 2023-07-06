@@ -1,0 +1,235 @@
+from Bio.Seq import Seq
+from Bio import SeqIO
+from biotite import sequence as bioseq
+import biotite.sequence.align as bioalign
+import biotite.sequence.graphics as graphics
+import matplotlib.pyplot as plt
+import random
+import numpy as np
+import primer_design
+import pandas as pd
+from dataclasses import dataclass
+from tqdm import tqdm
+
+
+@dataclass
+class MisMatch:
+    """Class for mismatches between two sequences."""
+
+    seq1_pos: int
+    seq1_codon: str
+    seq1_aa: str
+    seq1_resi: int
+    seq2_pos: int
+    seq2_codon: str
+    seq2_aa: str
+    seq2_resi: int
+
+
+def parse_fasta(fasta_file):
+    """Read a fasta file and return a pandas dataframe."""
+
+    records = SeqIO.parse(fasta_file, "fasta")
+    df = pd.DataFrame(columns=["seq"])
+    for record in records:
+        df.loc[record.id] = [str(record.seq)]
+
+    return df
+
+
+def pairwise_dna(seq1, seq2, type="local", gap_penalty=-10):
+    """Pairwise alignment of two DNA sequences.
+
+    Args:
+        seq1 (str): First DNA sequence.
+        seq2 (str): Second DNA sequence.
+
+    Returns:
+        ali: Pairwise alignment of the two sequences.
+    """
+
+    seq1 = bioseq.NucleotideSequence(seq1)
+    seq2 = bioseq.NucleotideSequence(seq2)
+    matrix = bioalign.SubstitutionMatrix.std_nucleotide_matrix()
+    local = True if type == "local" else False
+    ali = bioalign.align_optimal(
+        seq1,
+        seq2,
+        matrix,
+        local=local,
+        gap_penalty=gap_penalty,
+    )[0]
+
+    return ali
+
+
+def auto_assign(sanger_df, dna_df):
+    """Auto assign sanger sequences to reference sequences.
+
+    Args:
+        sanger_df (pd.DataFrame): Dataframe of sanger sequences.
+        dna_df (pd.DataFrame): Dataframe of reference sequences.
+
+        DataFrames must have a column named "seq" with the sequence and index of
+            the DataFrame must be the sequence name.
+
+    Returns:
+        data_df: Dataframe with sanger sequences assigned to reference sequences.
+    """
+    # Auto assign sanger sequences to reference sequences
+
+    score_df = pd.DataFrame(columns=["sanger_seq", "dna_seq", "score", "orientation"])
+
+    # Compute pairwise scores for all sanger sequences against all dna sequences
+
+    for sanger_seq_name in (pbar := tqdm(sanger_df.index)):
+        sanger_seq = sanger_df.loc[sanger_seq_name, "seq"]
+        rev_sanger_seq = str(Seq(sanger_seq).reverse_complement())
+        for dna_seq_name in dna_df.index:
+            dna_seq = dna_df.loc[dna_seq_name, "seq"]
+
+            pbar.set_description(f"Checking {sanger_seq_name} against {dna_seq_name}")
+            alignment = pairwise_dna(sanger_seq, dna_seq)
+            rev_alignment = pairwise_dna(rev_sanger_seq, dna_seq)
+            score = max(alignment.score, rev_alignment.score)
+            orientation = (
+                "forward" if alignment.score > rev_alignment.score else "reverse"
+            )
+
+            score_df.loc[len(score_df)] = [
+                sanger_seq_name,
+                dna_seq_name,
+                score,
+                orientation,
+            ]
+
+    # Assign sanger sequences to dna sequences
+    data_df = pd.DataFrame(columns=["dna_seq", "orientation"])
+    for sanger_seq_name in score_df["sanger_seq"].unique():
+        # Get best dna sequence
+        best_dna_seq = (
+            score_df[score_df["sanger_seq"] == sanger_seq_name]
+            .sort_values("score", ascending=False)
+            .iloc[0]["dna_seq"]
+        )
+
+        # Get orientation
+        orientation = (
+            score_df[score_df["sanger_seq"] == sanger_seq_name]
+            .sort_values("score", ascending=False)
+            .iloc[0]["orientation"]
+        )
+
+        # Add to data dict
+        data_df.loc[sanger_seq_name] = [best_dna_seq, orientation]
+
+    return data_df
+
+
+def compare_sequences(seq1, seq2, alignment):
+    """Compare two sequences and return mismatches."""
+
+    # List of mismatches
+    mismatches = []
+
+    # Get start and end positions of alignment
+    seq1_ali_start = alignment.trace[0][0]
+    seq1_ali_end = alignment.trace[-1][0]
+
+    # Loop through alignment and find differences
+    for seq1_i, seq2_i in alignment.trace:
+        # Check if start of codon
+        if seq1_i % 3 == 0:
+            # Check if end of codon is in alignment
+            if seq1_i + 3 > seq1_ali_end:
+                break
+
+            # Skip if codon starts with gap
+            if seq1_i == -1 or seq2_i == -1:
+                continue
+
+            # Get codons
+            seq1_codon = seq1[seq1_i : seq1_i + 3]
+            seq2_codon = seq2[seq2_i : seq2_i + 3]
+
+            # Replace Ns in seq2 with seq1 codon
+            seq2_codon = "".join(
+                [
+                    seq2_codon[i] if seq2_codon[i] != "N" else seq1_codon[i]
+                    for i in range(3)
+                ]
+            )
+
+            # Check if codons are the same
+            if seq1_codon != seq2_codon:
+                # Create mismatch object
+                mismatch = MisMatch(
+                    seq1_pos=seq1_i,
+                    seq1_codon=seq1_codon,
+                    seq1_aa=str(Seq(seq1_codon).translate()),
+                    seq1_resi=seq1_i // 3 + 1,
+                    seq2_pos=seq2_i,
+                    seq2_codon=seq2_codon,
+                    seq2_aa=str(Seq(seq2_codon).translate()),
+                    seq2_resi=seq2_i // 3 + 1,
+                )
+
+                # Add mismatch to list
+                mismatches.append(mismatch)
+    return mismatches
+
+
+def check_sanger_sequence(
+    dna_seq_name,
+    dna_seq,
+    sanger_seq_name,
+    sanger_seq,
+    plot=False,
+):
+    """Compare sanger sequences to reference sequence."""
+    # Align sanger reads to dna sequence
+    ali = pairwise_dna(dna_seq, sanger_seq)
+
+    # Get start and end positions of alignment
+    sanger_dna_start = ali.trace[0][0]
+    sanger_dna_end = ali.trace[-1][0]
+
+    # Print information
+    print(f"{dna_seq_name}, {sanger_seq_name}:")
+    print(f"\tdna_seq: {dna_seq}")
+    print(f"\tsanger_seq: {sanger_seq}")
+    print(f"\tAlignment Nucleotides: {sanger_dna_start+1} to {sanger_dna_end+1}")
+
+    # Find differences between forward read and dna sequence
+    mismatches = compare_sequences(dna_seq, sanger_seq, ali)
+
+    # Print mismatches
+    if mismatches:
+        print("\tMismatches:")
+        for mismatch in mismatches:
+            print(
+                f"\t\tNucleotides {mismatch.seq1_pos+1}-{mismatch.seq1_pos+4} {mismatch.seq1_codon} ({mismatch.seq1_aa}{mismatch.seq1_resi}) -> {mismatch.seq2_codon} ({mismatch.seq2_aa})"
+            )
+    else:
+        print("\tNo changes found in sanger sequence")
+
+    # Plot alignment
+    if plot:
+        # Create figure
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+        plt.suptitle(f"{dna_seq_name}\n{sanger_seq_name}")
+
+        matrix = bioalign.SubstitutionMatrix.std_nucleotide_matrix()
+
+        graphics.plot_alignment_similarity_based(
+            axs,
+            ali,
+            matrix=matrix,
+            labels=["DNA Sequence", "Sanger Read"],
+            show_numbers=True,
+            show_line_position=True,
+        )
+
+        plt.tight_layout()
+
+        plt.show()
