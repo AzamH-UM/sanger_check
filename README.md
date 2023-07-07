@@ -3,7 +3,7 @@
 ## Examples:
 See `examples/sanger_check_demo.ipynb` for introduction to using sanger_check.
 
-See `https://colab.research.google.com/drive/1HsShDkgk7yC9oluZwzf2G2QnpACqnUzF?usp=sharing` for interactive colab notebook.
+[Colab Notebook](https://colab.research.google.com/drive/1HsShDkgk7yC9oluZwzf2G2QnpACqnUzF?usp=sharing)
 
 ## Availible Functions
 `sc.parse_fasta(fasta_file)`
