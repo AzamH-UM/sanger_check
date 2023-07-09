@@ -8,6 +8,8 @@ See `examples/sanger_check_demo.ipynb` for introduction to using sanger_check.
 ## Availible Functions
 `sc.parse_fasta(fasta_file)`
  - Parses a Fasta file and returns a pandas DataFrame
+ - Can be used with Azenta multifasta file
+ - ![Azenta MultiFasta Download](png/multifasta.png)
 
 `sc.auto_assign(sanger_df, seq_df)`
  - Parsed multifasta for sanger sequences and dna sequences can be automatically matched together using pairwise alignment
