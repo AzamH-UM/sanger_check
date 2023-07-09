@@ -183,6 +183,7 @@ def check_sanger_sequence(
     sanger_seq_name,
     sanger_seq,
     plot=False,
+    plot_width=6,
 ):
     """Compare sanger sequences to reference sequence."""
     # Align sanger reads to dna sequence
@@ -213,17 +214,42 @@ def check_sanger_sequence(
 
     # Plot alignment
     if plot:
+        # Scale plot height with alignment length
+        aln_len = len(ali.trace)
+        plot_height = int(plot_width * aln_len / 500)
+
         # Create figure
-        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(8, 6))
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(plot_height, plot_width))
         plt.suptitle(f"{dna_seq_name}\n{sanger_seq_name}")
 
-        matrix = bioalign.SubstitutionMatrix.std_nucleotide_matrix()
+        # Highlight differences with substitution matrix
+        std_matrix = bioalign.SubstitutionMatrix.std_nucleotide_matrix()
+        alphabet_1 = std_matrix.get_alphabet1()
+        alphabet_2 = std_matrix.get_alphabet2()
+        score_matrix = np.ones((len(alphabet_1), len(alphabet_2)))
+
+        # Penalize higher mismatches in first four nucleotides (ATCG)
+        for i in range(4):
+            for j in range(4):
+                score_matrix[i, j] = 10
+
+        # Set score to 0 for matches
+        for i in range(len(alphabet_1)):
+            score_matrix[i, i] = 0
+
+        matrix = bioalign.SubstitutionMatrix(
+            alphabet_1,
+            alphabet_2,
+            score_matrix,
+        )
+
+        # Plot alignment
 
         graphics.plot_alignment_similarity_based(
             axs,
             ali,
             matrix=matrix,
-            labels=["DNA Sequence", "Sanger Read"],
+            labels=["DNA Sequence", "Sequencing Read"],
             show_numbers=True,
             show_line_position=True,
         )
