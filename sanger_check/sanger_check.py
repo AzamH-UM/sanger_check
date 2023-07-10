@@ -61,7 +61,7 @@ def pairwise_dna(seq1, seq2, type="local", gap_penalty=-10):
     return ali
 
 
-def auto_assign(sanger_df, dna_df):
+def auto_assign(sanger_df, dna_df, gap_penalty=-10):
     """Auto assign sanger sequences to reference sequences.
 
     Args:
@@ -87,8 +87,10 @@ def auto_assign(sanger_df, dna_df):
             dna_seq = dna_df.loc[dna_seq_name, "seq"]
 
             pbar.set_description(f"Checking {sanger_seq_name} against {dna_seq_name}")
-            alignment = pairwise_dna(sanger_seq, dna_seq)
-            rev_alignment = pairwise_dna(rev_sanger_seq, dna_seq)
+            alignment = pairwise_dna(sanger_seq, dna_seq, gap_penalty=gap_penalty)
+            rev_alignment = pairwise_dna(
+                rev_sanger_seq, dna_seq, gap_penalty=gap_penalty
+            )
             score = max(alignment.score, rev_alignment.score)
             orientation = (
                 "forward" if alignment.score > rev_alignment.score else "reverse"
@@ -142,13 +144,18 @@ def compare_sequences(seq1, seq2, alignment):
             if seq1_i + 3 > seq1_ali_end:
                 break
 
-            # Skip if codon starts with gap
-            if seq1_i == -1 or seq2_i == -1:
-                continue
+            # # Skip if codon starts with gap
+            # if seq1_i == -1 or seq2_i == -1:
+            #     continue
 
             # Get codons
-            seq1_codon = seq1[seq1_i : seq1_i + 3]
-            seq2_codon = seq2[seq2_i : seq2_i + 3]
+            seq1_index = np.where(alignment.trace[:, 0] == seq1_i)[0][0]
+            seq1_j = alignment.trace[seq1_index + 1][0]
+            seq1_k = alignment.trace[seq1_index + 2][0]
+            seq2_j = alignment.trace[seq1_index + 1][1]
+            seq2_k = alignment.trace[seq1_index + 2][1]
+            seq1_codon = seq1[seq1_i] + seq1[seq1_j] + seq1[seq1_k]
+            seq2_codon = seq2[seq2_i] + seq2[seq2_j] + seq2[seq2_k]
 
             # Replace Ns in seq2 with seq1 codon
             seq2_codon = "".join(
@@ -160,15 +167,23 @@ def compare_sequences(seq1, seq2, alignment):
 
             # Check if codons are the same
             if seq1_codon != seq2_codon:
+                # Get amino acid if no gaps or Ns
+                seq1_aa = None
+                seq2_aa = None
+                if ("-" not in seq1_codon) and ("N" not in seq1_codon):
+                    seq1_aa = str(Seq(seq1_codon).translate())
+                if ("-" not in seq2_codon) and ("N" not in seq2_codon):
+                    seq2_aa = str(Seq(seq2_codon).translate())
+
                 # Create mismatch object
                 mismatch = MisMatch(
                     seq1_pos=seq1_i,
                     seq1_codon=seq1_codon,
-                    seq1_aa=str(Seq(seq1_codon).translate()),
+                    seq1_aa=seq1_aa,
                     seq1_resi=seq1_i // 3 + 1,
                     seq2_pos=seq2_i,
                     seq2_codon=seq2_codon,
-                    seq2_aa=str(Seq(seq2_codon).translate()),
+                    seq2_aa=seq2_aa,
                     seq2_resi=seq2_i // 3 + 1,
                 )
 
@@ -184,10 +199,11 @@ def check_sanger_sequence(
     sanger_seq,
     plot=False,
     plot_width=6,
+    gap_penalty=-10,
 ):
     """Compare sanger sequences to reference sequence."""
     # Align sanger reads to dna sequence
-    ali = pairwise_dna(dna_seq, sanger_seq)
+    ali = pairwise_dna(dna_seq, sanger_seq, gap_penalty=gap_penalty)
 
     # Get start and end positions of alignment
     sanger_dna_start = ali.trace[0][0]
@@ -216,7 +232,7 @@ def check_sanger_sequence(
     if plot:
         # Scale plot height with alignment length
         aln_len = len(ali.trace)
-        plot_height = max(int(plot_width * aln_len / 500), plot_width)
+        plot_height = max(int(plot_width * aln_len / 400), plot_width)
 
         # Create figure
         fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(plot_height, plot_width))
