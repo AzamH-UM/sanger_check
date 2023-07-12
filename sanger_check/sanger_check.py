@@ -234,7 +234,7 @@ def check_sanger_sequence(
     if plot:
         # Scale plot height with alignment length
         aln_len = len(ali.trace)
-        plot_height = max(int(plot_width * aln_len / 200), plot_width)
+        plot_height = max(int(plot_width * aln_len / 400), plot_width)
 
         # Create figure
         fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(plot_height, plot_width))
