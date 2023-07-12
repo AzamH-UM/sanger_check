@@ -154,8 +154,10 @@ def compare_sequences(seq1, seq2, alignment):
             seq1_k = alignment.trace[seq1_index + 2][0]
             seq2_j = alignment.trace[seq1_index + 1][1]
             seq2_k = alignment.trace[seq1_index + 2][1]
-            seq1_codon = seq1[seq1_i] + seq1[seq1_j] + seq1[seq1_k]
-            seq2_codon = seq2[seq2_i] + seq2[seq2_j] + seq2[seq2_k]
+            seq1_indicies = [alignment.trace[seq1_index][0], seq1_j, seq1_k]
+            seq2_indicies = [alignment.trace[seq1_index][1], seq2_j, seq2_k]
+            seq1_codon = "".join([seq1[i] if i != -1 else "-" for i in seq1_indicies])
+            seq2_codon = "".join([seq2[i] if i != -1 else "-" for i in seq2_indicies])
 
             # Replace Ns in seq2 with seq1 codon
             seq2_codon = "".join(
