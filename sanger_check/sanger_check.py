@@ -275,11 +275,13 @@ def check_sanger_sequence(
 
         plt.tight_layout()
 
-        plt.show()
-
         # Save plot
         if plot_outfile:
             plt.savefig(plot_outfile, dpi=300)
+
+        plt.show()
+
+        
 
 
     # Return mismatches as dataframe
