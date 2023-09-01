@@ -300,8 +300,8 @@ def check_sanger_sequence(
                 mismatch.seq2_codon,
                 mismatch.seq2_aa,
                 mismatch.seq2_resi,
-                ''.join([dna_seq[x] for x in ali.trace[:, 0] if x != -1 else "-" ]),
-                ''.join([sanger_seq[x] for x in ali.trace[:, 1] if x != -1 else "-"]),
+                ''.join([dna_seq[x] if x != -1 else "-" for x in ali.trace[:, 0]]),
+                ''.join([sanger_seq[x] if x != -1 else "-" for x in ali.trace[:, 1]]),
             ]
             for mismatch in mismatches
         ],
