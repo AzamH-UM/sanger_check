@@ -200,7 +200,8 @@ def check_sanger_sequence(
     sanger_seq_name,
     sanger_seq,
     plot=False,
-    plot_width=6,
+    plot_outfile=None,
+    plot_width=10,
     gap_penalty=-10,
 ):
     """Compare sanger sequences to reference sequence."""
@@ -275,3 +276,44 @@ def check_sanger_sequence(
         plt.tight_layout()
 
         plt.show()
+
+        # Save plot
+        if plot_outfile:
+            plt.savefig(plot_outfile, dpi=300)
+
+
+    # Return mismatches as dataframe
+    return pd.DataFrame(
+        [
+            [
+                dna_seq_name,
+                sanger_seq_name,
+                mismatch.seq1_pos,
+                mismatch.seq1_codon,
+                mismatch.seq1_aa,
+                mismatch.seq1_resi,
+                mismatch.seq2_pos,
+                mismatch.seq2_codon,
+                mismatch.seq2_aa,
+                mismatch.seq2_resi,
+                ''.join([dna_seq[x] for x in ali.trace[:, 0]]),
+                ''.join([sanger_seq[x] for x in ali.trace[:, 1]]),
+            ]
+            for mismatch in mismatches
+        ],
+        columns=[
+            "dna_seq_name",
+            "sanger_seq_name",
+            "dna_pos",
+            "dna_codon",
+            "dna_aa",
+            "dna_resi",
+            "sanger_pos",
+            "sanger_codon",
+            "sanger_aa",
+            "sanger_resi",
+            "dna_seq_aln",
+            "sanger_seq_aln",
+        ],
+    )
+
