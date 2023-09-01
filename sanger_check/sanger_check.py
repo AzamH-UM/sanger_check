@@ -281,6 +281,8 @@ def check_sanger_sequence(
 
         plt.show()
 
+        plt.close()
+
         
 
 
